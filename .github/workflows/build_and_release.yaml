@@ -87,10 +87,11 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
         run: |
-          # Set binary name based on OS
-          BINARY_NAME="src-counter"
+          # Set binary name with platform identifier
           if [ "$GOOS" = "windows" ]; then
-            BINARY_NAME="src-counter.exe"
+            BINARY_NAME="src-counter-v${VERSION}-${{ matrix.platform }}.exe"
+          else
+            BINARY_NAME="src-counter-v${VERSION}-${{ matrix.platform }}"
           fi
 
           echo "Building src-counter v${VERSION} for ${GOOS}/${GOARCH}"
@@ -106,23 +107,11 @@ jobs:
           ls -lh "${BINARY_NAME}"
           file "${BINARY_NAME}" || true
 
-          # Create archive
-          ARCHIVE_NAME="src-counter-v${VERSION}-${{ matrix.platform }}"
-          if [ "$GOOS" = "windows" ]; then
-            zip "${ARCHIVE_NAME}.zip" "${BINARY_NAME}"
-            echo "Archive created: ${ARCHIVE_NAME}.zip"
-            ls -lh "${ARCHIVE_NAME}.zip"
-          else
-            tar czf "${ARCHIVE_NAME}.tar.gz" "${BINARY_NAME}"
-            echo "Archive created: ${ARCHIVE_NAME}.tar.gz"
-            ls -lh "${ARCHIVE_NAME}.tar.gz"
-          fi
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: src-counter-${{ matrix.platform }}
-          path: src-counter-v*.*
+          path: src-counter-v*
           retention-days: 7
 
   release:
@@ -143,7 +132,7 @@ jobs:
       - name: Organize artifacts
         run: |
           mkdir -p release
-          find artifacts -name "src-counter-v*.*" -exec cp {} release/ \;
+          find artifacts -type f -name "src-counter-v*" -exec cp {} release/ \;
           cd release
           ls -lh
           echo "=== Artifacts Ready for Release ==="
@@ -156,60 +145,8 @@ jobs:
           tag: v${{ needs.check_release.outputs.version }}
           name: src-counter v${{ needs.check_release.outputs.version }}
           body: |
-            ## src-counter - Source Line Counter v${{ needs.check_release.outputs.version }}
-            
-            A fast and efficient tool to count lines of code in Go, JavaScript/TypeScript, and C/C++ projects.
-            
-            ### Features
-            - Count code lines (excluding comments and blank lines)
-            - Optional whitespace and comment inclusion
-            - Configurable skip lists for directories and files
-            - Per-language statistics
-            - Verbose per-file output mode
-            
-            ### Installation
-            
-            Download the appropriate binary for your platform from the assets below, extract it, and move it to a directory in your PATH.
-            
-            **Linux/macOS:**
-            ```bash
-            tar xzf src-counter-v${{ needs.check_release.outputs.version }}-<platform>.tar.gz
-            sudo mv src-counter /usr/local/bin/
-            ```
-            
-            **Windows:**
-            ```powershell
-            # Extract src-counter-v${{ needs.check_release.outputs.version }}-windows-amd64.zip
-            # Move src-counter.exe to a directory in your PATH
-            ```
-            
-            ### Usage
-            
-            ```bash
-            # Count lines in current directory
-            src-counter
-            
-            # Include whitespace and comments
-            src-counter -w
-            
-            # Show per-file breakdown
-            src-counter -v
-            
-            # Analyze specific directory
-            src-counter /path/to/project
-            
-            # List available skip lists
-            src-counter --list-skiplists
-            
-            # Show help
-            src-counter -h
-            ```
-            
-            ### Checksums
-            See SHA256SUMS in the release assets.
-            
-            For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
-          artifacts: release/src-counter-v*.*,release/SHA256SUMS
+            Release v${{ needs.check_release.outputs.version }}
+          artifacts: release/src-counter-v*,release/SHA256SUMS
           draft: false
           prerelease: false
 
@@ -220,7 +157,7 @@ jobs:
           echo "Version: v${{ needs.check_release.outputs.version }}"
           echo ""
           echo "Artifacts:"
-          ls -lh release/src-counter-v*.*
+          ls -lh release/src-counter-v*
           echo ""
           echo "Checksums:"
           cat release/SHA256SUMS
