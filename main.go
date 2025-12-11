@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"goloc/cli"
-	"goloc/counters"
-	skips "goloc/skiplists"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/a2hop/source-line-counter/cli"
+	"github.com/a2hop/source-line-counter/counters"
+	skips "github.com/a2hop/source-line-counter/skiplists"
 )
 
 type LanguageStats struct {

@@ -34,11 +34,11 @@ for build in "${builds[@]}"; do
   # Build
   if [ -n "$GOARM" ]; then
     CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH GOARM=$GOARM \
-      go build -ldflags="-s -w -X goloc/about.Version=${VERSION}" \
+      go build -ldflags="-s -w -X github.com/a2hop/source-line-counter/about.Version=${VERSION}" \
       -o "release/${BINARY_NAME}" .
   else
     CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH \
-      go build -ldflags="-s -w -X goloc/about.Version=${VERSION}" \
+      go build -ldflags="-s -w -X github.com/a2hop/source-line-counter/about.Version=${VERSION}" \
       -o "release/${BINARY_NAME}" .
   fi
   

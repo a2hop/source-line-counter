@@ -2,8 +2,9 @@ package cli
 
 import (
 	"fmt"
-	skips "goloc/skiplists"
 	"sort"
+
+	skips "github.com/a2hop/source-line-counter/skiplists"
 )
 
 func PrintSkipLists() {

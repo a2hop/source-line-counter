@@ -2,7 +2,8 @@ package cli
 
 import (
 	"fmt"
-	"goloc/about"
+
+	"github.com/a2hop/source-line-counter/about"
 )
 
 func PrintHelp(verbose bool) {

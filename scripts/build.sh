@@ -11,7 +11,7 @@ mkdir -p build
 
 # Build for current platform
 echo "Building for current platform..."
-go build -ldflags="-s -w -X goloc/about.Version=${VERSION}" -o build/src-counter .
+go build -ldflags="-s -w -X github.com/a2hop/source-line-counter/about.Version=${VERSION}" -o build/src-counter .
 
 echo ""
 echo "Build successful!"
