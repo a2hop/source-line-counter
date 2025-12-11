@@ -1,0 +1,226 @@
+name: Build and Release src-counter
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'version'
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/build_and_release.yaml'
+  workflow_dispatch:
+
+jobs:
+  check_release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_exists: ${{ steps.check.outputs.exists }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat version)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Check if release exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view v${{ steps.version.outputs.version }} &>/dev/null; then
+            echo "Release v${{ steps.version.outputs.version }} already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release v${{ steps.version.outputs.version }} does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check_release
+    if: needs.check_release.outputs.release_exists == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            platform: linux-amd64
+          - goos: linux
+            goarch: arm64
+            platform: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+            platform: linux-armv7
+          - goos: darwin
+            goarch: amd64
+            platform: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            platform: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            platform: windows-amd64
+          - goos: windows
+            goarch: arm64
+            platform: windows-arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binary
+        env:
+          VERSION: ${{ needs.check_release.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          # Set binary name based on OS
+          BINARY_NAME="src-counter"
+          if [ "$GOOS" = "windows" ]; then
+            BINARY_NAME="src-counter.exe"
+          fi
+
+          echo "Building src-counter v${VERSION} for ${GOOS}/${GOARCH}"
+          
+          # Build with version information
+          CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X goloc/about.Version=${VERSION}" \
+            -o "${BINARY_NAME}" \
+            .
+
+          # Verify the binary
+          echo "Binary created:"
+          ls -lh "${BINARY_NAME}"
+          file "${BINARY_NAME}" || true
+
+          # Create archive
+          ARCHIVE_NAME="src-counter-v${VERSION}-${{ matrix.platform }}"
+          if [ "$GOOS" = "windows" ]; then
+            zip "${ARCHIVE_NAME}.zip" "${BINARY_NAME}"
+            echo "Archive created: ${ARCHIVE_NAME}.zip"
+            ls -lh "${ARCHIVE_NAME}.zip"
+          else
+            tar czf "${ARCHIVE_NAME}.tar.gz" "${BINARY_NAME}"
+            echo "Archive created: ${ARCHIVE_NAME}.tar.gz"
+            ls -lh "${ARCHIVE_NAME}.tar.gz"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: src-counter-${{ matrix.platform }}
+          path: src-counter-v*.*
+          retention-days: 7
+
+  release:
+    needs: [check_release, build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p release
+          find artifacts -name "src-counter-v*.*" -exec cp {} release/ \;
+          cd release
+          ls -lh
+          echo "=== Artifacts Ready for Release ==="
+          sha256sum src-counter-v* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ needs.check_release.outputs.version }}
+          name: src-counter v${{ needs.check_release.outputs.version }}
+          body: |
+            ## src-counter - Source Line Counter v${{ needs.check_release.outputs.version }}
+            
+            A fast and efficient tool to count lines of code in Go, JavaScript/TypeScript, and C/C++ projects.
+            
+            ### Features
+            - Count code lines (excluding comments and blank lines)
+            - Optional whitespace and comment inclusion
+            - Configurable skip lists for directories and files
+            - Per-language statistics
+            - Verbose per-file output mode
+            
+            ### Installation
+            
+            Download the appropriate binary for your platform from the assets below, extract it, and move it to a directory in your PATH.
+            
+            **Linux/macOS:**
+            ```bash
+            tar xzf src-counter-v${{ needs.check_release.outputs.version }}-<platform>.tar.gz
+            sudo mv src-counter /usr/local/bin/
+            ```
+            
+            **Windows:**
+            ```powershell
+            # Extract src-counter-v${{ needs.check_release.outputs.version }}-windows-amd64.zip
+            # Move src-counter.exe to a directory in your PATH
+            ```
+            
+            ### Usage
+            
+            ```bash
+            # Count lines in current directory
+            src-counter
+            
+            # Include whitespace and comments
+            src-counter -w
+            
+            # Show per-file breakdown
+            src-counter -v
+            
+            # Analyze specific directory
+            src-counter /path/to/project
+            
+            # List available skip lists
+            src-counter --list-skiplists
+            
+            # Show help
+            src-counter -h
+            ```
+            
+            ### Checksums
+            See SHA256SUMS in the release assets.
+            
+            For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
+          artifacts: release/src-counter-v*.*,release/SHA256SUMS
+          draft: false
+          prerelease: false
+
+      - name: Release Summary
+        run: |
+          echo "✅ Release created successfully!"
+          echo ""
+          echo "Version: v${{ needs.check_release.outputs.version }}"
+          echo ""
+          echo "Artifacts:"
+          ls -lh release/src-counter-v*.*
+          echo ""
+          echo "Checksums:"
+          cat release/SHA256SUMS
